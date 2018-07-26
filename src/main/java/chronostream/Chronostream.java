@@ -51,59 +51,66 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 
-@State(Scope.Benchmark)
 public class Chronostream {
+  private static Object lock = new Object();
+  private static Provider provider;
+  private static Key key;
 
-  private Provider provider;
-  private Key key;
-  private byte[] iv;
-  private Map<Integer, byte[]> ciphertexts = new HashMap<>();
+  @State(Scope.Thread)
+  public static class ThreadState {
+    byte[] iv;
+    Map<Integer, byte[]> ciphertexts = new HashMap<>();
 
-  @Setup(Level.Invocation)
-  public void setUp() throws Exception {
-    // Configure nCipher provider
-    provider = new nCipherKM();
-    Security.addProvider(provider);
+    @Setup(Level.Trial)
+    public void doSetup() throws Exception {
+      synchronized (lock) {
+        if (provider == null) {
+          // Configure nCipher provider
+          provider = new nCipherKM();
+          Security.addProvider(provider);
 
-    // Set the softcard. Password is "prout"
-    System.setProperty("protect", "softcard:fb1d3e233393838d51eb5c0a911d3056c4155af8");
+          // Set the softcard. Password is "prout"
+          System.setProperty("protect", "softcard:fb1d3e233393838d51eb5c0a911d3056c4155af8");
 
-    // Create a key
-    KeyGenerator keyGenerator = KeyGenerator.getInstance("AES", provider);
-    keyGenerator.init(256);
-    key = keyGenerator.generateKey();
+          // Create a key
+          KeyGenerator keyGenerator = KeyGenerator.getInstance("AES", provider);
+          keyGenerator.init(256);
+          key = keyGenerator.generateKey();
+        }
+      }
 
-    // Create the ciphertext
-    iv = random(16);
-    for (int i = 100; i <= 200; i++) {
-      Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", provider);
-      cipher.init(Cipher.ENCRYPT_MODE, key, new IvParameterSpec(iv));
-      ciphertexts.put(i, cipher.doFinal(random(i)));
+      iv = random(16);
+      for (int i=100; i<=200; i++) {
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", provider);
+        cipher.init(Cipher.ENCRYPT_MODE, key, new IvParameterSpec(iv));
+        ciphertexts.put(i, cipher.doFinal(random(i)));
+      }
     }
   }
 
-  private byte[] random(int length) {
+  private static byte[] random(int length) {
     byte[] r = new byte[length];
     new Random().nextBytes(r);
     return r;
   }
 
+  private byte[] aesDecryption(ThreadState state) throws Exception {
+    int dataSize = (int) (Math.random() * 100 + 100);
+    Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", provider);
+    cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(state.iv));
+    return cipher.doFinal(state.ciphertexts.get(dataSize));
+  }
+
   @Benchmark
   @BenchmarkMode(Mode.Throughput)
-  public byte[] testAesDecryption() throws Exception {
-    int dataSize = (int)(Math.random() * 100 + 100);
-    Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", provider);
-    cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
-    return cipher.doFinal(ciphertexts.get(dataSize));
+  public byte[] testAesDecryption(ThreadState state) throws Exception {
+    return aesDecryption(state);
   }
 
   @Benchmark
   @BenchmarkMode(Mode.AverageTime)
   @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  public byte[] testAesDecryption2() throws Exception {
-    int dataSize = (int)(Math.random() * 100 + 100);
-    Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", provider);
-    cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
-    return cipher.doFinal(ciphertexts.get(dataSize));
+  public byte[] testAesDecryption2(ThreadState state) throws Exception {
+    return aesDecryption(state);
   }
 }
