@@ -38,6 +38,7 @@ import java.security.Security;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.spec.IvParameterSpec;
@@ -45,6 +46,7 @@ import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
@@ -87,8 +89,18 @@ public class Chronostream {
   }
 
   @Benchmark
-  @BenchmarkMode({Mode.Throughput, Mode.AverageTime})
+  @BenchmarkMode(Mode.Throughput)
   public byte[] testAesDecryption() throws Exception {
+    int dataSize = (int)(Math.random() * 100 + 100);
+    Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", provider);
+    cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
+    return cipher.doFinal(ciphertexts.get(dataSize));
+  }
+
+  @Benchmark
+  @BenchmarkMode(Mode.AverageTime)
+  @OutputTimeUnit(TimeUnit.MILLISECONDS)
+  public byte[] testAesDecryption2() throws Exception {
     int dataSize = (int)(Math.random() * 100 + 100);
     Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", provider);
     cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
