@@ -31,22 +31,20 @@
 
 package chronostream;
 
+import com.ncipher.provider.km.KMHmacSHA256Key;
+import com.ncipher.provider.km.KMRijndaelKey;
 import com.ncipher.provider.km.nCipherKM;
-import java.security.Key;
 import java.security.Provider;
 import java.security.Security;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
+import javax.crypto.Mac;
 import javax.crypto.spec.IvParameterSpec;
 import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
@@ -54,12 +52,25 @@ import org.openjdk.jmh.annotations.State;
 public class Chronostream {
   private static Object lock = new Object();
   private static Provider provider;
-  private static Key key;
+
+  private static KMRijndaelKey aesKey;
+  public static final int AES_MIN = 100;
+  public static final int AES_MAX = 200;
+
+  public static final int HMAC_MIN = 3;
+  public static final int HMAC_MAX = 151;
+  private static KMHmacSHA256Key hmacSHA256Key;
+
+
 
   @State(Scope.Thread)
   public static class ThreadState {
-    byte[] iv;
-    Map<Integer, byte[]> ciphertexts = new HashMap<>();
+    byte[] aesIv;
+    Map<Integer, byte[]> aesCiphertexts = new HashMap<>();
+    Map<Integer, byte[]> aesPlaintexts = new HashMap<>();
+
+    Map<Integer, byte[]> hmacPlaintexts = new HashMap();
+    Map<Integer, byte[]> hmacResults = new HashMap<>();
 
     @Setup(Level.Trial)
     public void doSetup() throws Exception {
@@ -72,18 +83,34 @@ public class Chronostream {
           // Set the softcard. Password is "prout"
           System.setProperty("protect", "softcard:fb1d3e233393838d51eb5c0a911d3056c4155af8");
 
-          // Create a key
+          // Create keys
           KeyGenerator keyGenerator = KeyGenerator.getInstance("AES", provider);
           keyGenerator.init(256);
-          key = keyGenerator.generateKey();
+          aesKey = (KMRijndaelKey)keyGenerator.generateKey();
+
+          keyGenerator = KeyGenerator.getInstance("HmacSHA256", provider);
+          keyGenerator.init(128);
+          hmacSHA256Key = (KMHmacSHA256Key)keyGenerator.generateKey();
         }
       }
 
-      iv = random(16);
-      for (int i=100; i<=200; i++) {
+      // generate plaintext/ciphertexts pairs
+      aesIv = random(16);
+      for (int i=AES_MIN; i<=AES_MAX; i++) {
         Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", provider);
-        cipher.init(Cipher.ENCRYPT_MODE, key, new IvParameterSpec(iv));
-        ciphertexts.put(i, cipher.doFinal(random(i)));
+        cipher.init(Cipher.ENCRYPT_MODE, aesKey, new IvParameterSpec(aesIv));
+
+        byte[] plaintext = random(i);
+        aesPlaintexts.put(i, plaintext);
+        aesCiphertexts.put(i, cipher.doFinal(plaintext));
+      }
+
+      for (int i=HMAC_MIN; i<=HMAC_MAX; i++) {
+        Mac mac = Mac.getInstance("HmacSHA256", provider);
+        mac.init(hmacSHA256Key);
+        byte[] plaintext = random(i);
+        hmacPlaintexts.put(i, plaintext);
+        hmacResults.put(i, mac.doFinal(plaintext));
       }
     }
   }
@@ -94,23 +121,28 @@ public class Chronostream {
     return r;
   }
 
-  private byte[] aesDecryption(ThreadState state) throws Exception {
-    int dataSize = (int) (Math.random() * 100 + 100);
-    Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", provider);
-    cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(state.iv));
-    return cipher.doFinal(state.ciphertexts.get(dataSize));
+  // AES
+
+  @Benchmark
+  public byte[] testAesDecryption(ThreadState state) throws Exception {
+    return Aes.aesDecryption(provider, aesKey, state);
   }
 
   @Benchmark
-  @BenchmarkMode(Mode.Throughput)
-  public byte[] testAesDecryptionThroughput(ThreadState state) throws Exception {
-    return aesDecryption(state);
+  public byte[] testNativeAesDecryption(ThreadState state) throws Exception {
+    return Aes.nativeAesDecryption(aesKey, state);
+  }
+
+  // HMAC
+
+  @Benchmark
+  public byte[] testHmac(ThreadState state) throws Exception {
+    return Hmac.hmac(provider, hmacSHA256Key, state);
   }
 
   @Benchmark
-  @BenchmarkMode(Mode.AverageTime)
-  @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  public byte[] testAesDecryptionLatency(ThreadState state) throws Exception {
-    return aesDecryption(state);
+  public byte[] testNativeHmac(ThreadState state) throws Exception {
+    return Hmac.nativeHmac(hmacSHA256Key, state);
   }
+
 }
