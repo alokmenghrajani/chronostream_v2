@@ -103,14 +103,14 @@ public class Chronostream {
 
   @Benchmark
   @BenchmarkMode(Mode.Throughput)
-  public byte[] testAesDecryption(ThreadState state) throws Exception {
+  public byte[] testAesDecryptionThroughput(ThreadState state) throws Exception {
     return aesDecryption(state);
   }
 
   @Benchmark
   @BenchmarkMode(Mode.AverageTime)
   @OutputTimeUnit(TimeUnit.MILLISECONDS)
-  public byte[] testAesDecryption2(ThreadState state) throws Exception {
+  public byte[] testAesDecryptionLatency(ThreadState state) throws Exception {
     return aesDecryption(state);
   }
 }
