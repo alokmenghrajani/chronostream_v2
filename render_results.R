@@ -1,6 +1,6 @@
 setwd('results')
 
-threads = 50
+threads = 35
 
 # merge all the files
 throughputs <- data.frame()

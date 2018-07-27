@@ -1,7 +1,8 @@
 #!/bin/bash
 
 for i in `seq 1 50`; do
-  echo "running $i"
-  java -cp /opt/nfast/java/classes/nCipherKM.jar:./chronostream-2.0.jar org.openjdk.jmh.Main -wi 1 -i 2 -f 2 -t $i -rff results/throughput_$i
-  java -cp /opt/nfast/java/classes/nCipherKM.jar:./chronostream-2.0.jar org.openjdk.jmh.Main -wi 1 -i 2 -f 2 -tu ms -bm avgt -t $i -rff results/latency_$i
+  for j in `seq 10 10 120`; do
+      java -cp /opt/nfast/java/classes/nCipherKM.jar:./chronostream-2.0.jar org.openjdk.jmh.Main -wi 1 -r $j"s" -i 1 -f 1 -t $i -rff "results/throughput_"$i"_"$j".csv"
+      java -cp /opt/nfast/java/classes/nCipherKM.jar:./chronostream-2.0.jar org.openjdk.jmh.Main -wi 1 -r $j"s" -i 1 -f 1 -t $i -tu ms -bm avgt -rff "results/latency_"$i"_"$j".csv"
+  done
 done
