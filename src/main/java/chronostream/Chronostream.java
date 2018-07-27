@@ -185,7 +185,7 @@ public class Chronostream {
   }
 
   @Benchmark
-  public byte[] testHmacNcore(ThreadState state) throws Exception {
+  public byte[] testHmacNCore(ThreadState state) throws Exception {
     return Hmac.hmacNCore(hmacSHA256Key, state);
   }
 
