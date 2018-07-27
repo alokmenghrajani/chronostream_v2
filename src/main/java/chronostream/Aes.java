@@ -28,20 +28,20 @@ import static chronostream.Chronostream.AES_MAX;
 import static chronostream.Chronostream.AES_MIN;
 
 public class Aes {
-  public static byte[] aesDecryption(Provider provider, Key key, Chronostream.ThreadState state) throws Exception {
+  public static byte[] aesDecryptionJce(Provider provider, Key key, Chronostream.ThreadState state) throws Exception {
     int dataSize = (int) (Math.random() * (AES_MAX - AES_MIN) + AES_MIN);
     Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding", provider);
     cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(state.aesIv));
     byte[] plaintext = cipher.doFinal(state.aesCiphertexts.get(dataSize));
 
     if (!Arrays.equals(plaintext, state.aesPlaintexts.get(dataSize))) {
-      throw new IllegalStateException("decryption failed");
+      throw new IllegalStateException("aes decryption failed");
     }
 
     return plaintext;
   }
 
-  public static byte[] nativeAesDecryption(KMKey key, Chronostream.ThreadState state) throws Exception {
+  public static byte[] aesDecryptionNCore(KMKey key, Chronostream.ThreadState state) throws Exception {
     int dataSize = (int) (Math.random() * (AES_MAX - AES_MIN) + AES_MIN);
     M_Command cmd;
     M_Reply rep;
@@ -62,7 +62,7 @@ public class Aes {
     byte[] plaintext = ((M_PlainTextType_Data_Bytes) ((M_Cmd_Reply_Decrypt)rep.reply).plain.data).data.value;
 
     if (!Arrays.equals(plaintext, state.aesPlaintexts.get(dataSize))) {
-      throw new IllegalStateException("decryption failed");
+      throw new IllegalStateException("aes decryption failed");
     }
 
     return plaintext;

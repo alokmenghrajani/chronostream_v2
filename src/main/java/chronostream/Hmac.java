@@ -25,7 +25,7 @@ import static chronostream.Chronostream.HMAC_MAX;
 import static chronostream.Chronostream.HMAC_MIN;
 
 public class Hmac {
-  public static byte[] hmac(Provider provider, Key key, Chronostream.ThreadState state) throws Exception {
+  public static byte[] hmacJce(Provider provider, Key key, Chronostream.ThreadState state) throws Exception {
     int dataSize = (int) (Math.random() * (HMAC_MAX - HMAC_MIN) + HMAC_MIN);
     Mac mac = Mac.getInstance("HmacSHA256", provider);
     mac.init(key);
@@ -38,7 +38,7 @@ public class Hmac {
     return result;
   }
 
-  public static byte[] nativeHmac(KMKey key, Chronostream.ThreadState state) throws Exception {
+  public static byte[] hmacNCore(KMKey key, Chronostream.ThreadState state) throws Exception {
     int dataSize = (int) (Math.random() * (HMAC_MAX - HMAC_MIN) + HMAC_MIN);
     M_Command cmd;
     M_Reply rep;

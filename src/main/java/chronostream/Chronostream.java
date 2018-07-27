@@ -32,10 +32,15 @@
 package chronostream;
 
 import com.ncipher.provider.km.KMHmacSHA256Key;
+import com.ncipher.provider.km.KMRSAPrivateKey;
 import com.ncipher.provider.km.KMRijndaelKey;
 import com.ncipher.provider.km.nCipherKM;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.security.Provider;
+import java.security.PublicKey;
 import java.security.Security;
+import java.security.spec.RSAKeyGenParameterSpec;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -49,6 +54,21 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 
+/**
+ * Benchmark, using JCE vs nCore API:
+ * AES:
+ * - AES-CBC-HMAC encryption (256 bit key)   (TODO)
+ * - AES-CBC-HMAC decryption (256 bit key)
+ *
+ * HMAC:
+ * - HmacSha256
+ *
+ * RSA:
+ * - RSA-OAEP decryption (2048 bit key)
+ * - RSA-PSS-SHA256 signing (2048 bit key)   (TODO)
+ * - RSA-PKCS1-SHA256 signing (2048 bit key) (TODO)
+ * - RSA-PKCS1-SHA512 signing (2048 bit key) (TODO)
+ */
 public class Chronostream {
   private static Object lock = new Object();
   private static Provider provider;
@@ -61,16 +81,23 @@ public class Chronostream {
   public static final int HMAC_MAX = 151;
   private static KMHmacSHA256Key hmacSHA256Key;
 
-
+  public static final int RSA_KEY_SIZE = 2048;
+  public static final int RSA_MIN = 10;
+  public static final int RSA_MAX = 64;
+  private static PublicKey rsaPublicKey;
+  private static KMRSAPrivateKey rsaPrivateKey;
 
   @State(Scope.Thread)
   public static class ThreadState {
     byte[] aesIv;
-    Map<Integer, byte[]> aesCiphertexts = new HashMap<>();
     Map<Integer, byte[]> aesPlaintexts = new HashMap<>();
+    Map<Integer, byte[]> aesCiphertexts = new HashMap<>();
 
     Map<Integer, byte[]> hmacPlaintexts = new HashMap();
     Map<Integer, byte[]> hmacResults = new HashMap<>();
+
+    Map<Integer, byte[]> rsaPlaintexts = new HashMap<>();
+    Map<Integer, byte[]> rsaCiphertexts = new HashMap<>();
 
     @Setup(Level.Trial)
     public void doSetup() throws Exception {
@@ -91,6 +118,14 @@ public class Chronostream {
           keyGenerator = KeyGenerator.getInstance("HmacSHA256", provider);
           keyGenerator.init(128);
           hmacSHA256Key = (KMHmacSHA256Key)keyGenerator.generateKey();
+
+          KeyPairGenerator keyPairGen = KeyPairGenerator.getInstance("RSA", provider);
+          RSAKeyGenParameterSpec
+              rsaKeyGenParameterSpec = new RSAKeyGenParameterSpec(RSA_KEY_SIZE, RSAKeyGenParameterSpec.F4);
+          keyPairGen.initialize(rsaKeyGenParameterSpec);
+          KeyPair keyPair = keyPairGen.generateKeyPair();
+          rsaPublicKey = keyPair.getPublic();
+          rsaPrivateKey = (KMRSAPrivateKey)keyPair.getPrivate();
         }
       }
 
@@ -112,6 +147,15 @@ public class Chronostream {
         hmacPlaintexts.put(i, plaintext);
         hmacResults.put(i, mac.doFinal(plaintext));
       }
+
+      for (int i=RSA_MIN; i<=RSA_MAX; i++) {
+        Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA1AndMGF1Padding", provider);
+        cipher.init(Cipher.ENCRYPT_MODE, rsaPublicKey);
+
+        byte[] plaintext = random(i);
+        rsaPlaintexts.put(i, plaintext);
+        rsaCiphertexts.put(i, cipher.doFinal(plaintext));
+      }
     }
   }
 
@@ -121,28 +165,39 @@ public class Chronostream {
     return r;
   }
 
-  // AES
+  //// AES
 
   @Benchmark
-  public byte[] testAesDecryption(ThreadState state) throws Exception {
-    return Aes.aesDecryption(provider, aesKey, state);
+  public byte[] testAesDecryptionJce(ThreadState state) throws Exception {
+    return Aes.aesDecryptionJce(provider, aesKey, state);
   }
 
   @Benchmark
-  public byte[] testNativeAesDecryption(ThreadState state) throws Exception {
-    return Aes.nativeAesDecryption(aesKey, state);
+  public byte[] testAesDecryptionNCore(ThreadState state) throws Exception {
+    return Aes.aesDecryptionNCore(aesKey, state);
   }
 
   // HMAC
 
   @Benchmark
-  public byte[] testHmac(ThreadState state) throws Exception {
-    return Hmac.hmac(provider, hmacSHA256Key, state);
+  public byte[] testHmacJce(ThreadState state) throws Exception {
+    return Hmac.hmacJce(provider, hmacSHA256Key, state);
   }
 
   @Benchmark
-  public byte[] testNativeHmac(ThreadState state) throws Exception {
-    return Hmac.nativeHmac(hmacSHA256Key, state);
+  public byte[] testHmacNcore(ThreadState state) throws Exception {
+    return Hmac.hmacNCore(hmacSHA256Key, state);
   }
 
+  // RSA
+
+  @Benchmark
+  public byte[] testRsaDecryptionJce(ThreadState state) throws Exception {
+    return Rsa.rsaDecryptionJce(provider, rsaPrivateKey, state);
+  }
+
+  @Benchmark
+  public byte[] testRsaDecryptionNCore(ThreadState state) throws Exception {
+    return Rsa.rsaDecryptionNCore(rsaPrivateKey, state);
+  }
 }
