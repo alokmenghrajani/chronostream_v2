@@ -48,11 +48,19 @@ public class Rsa {
 
     byte[] ciphertext = state.rsaCiphertexts.get(dataSize);
 
-    // WARNING: the conversion from byte[] to M_Bignum below might be incorrect. You probably don't
-    // want to use this code in production!
+    // note: the conversion from byte[] to M_Bignum should not be needed per Thales docs...
+    M_Bignum num;
+    if (ciphertext.length > 0 && (ciphertext[0] & 128) == 128) {
+      byte[] t = new byte[ciphertext.length + 1];
+      t[0] = 0;
+      System.arraycopy(ciphertext, 0, t, 1, ciphertext.length);
+      num = new M_Bignum(new BigInteger(t));
+    } else {
+      num = new M_Bignum(new BigInteger(ciphertext));
+    }
     M_Cmd_Args_Decrypt args = new M_Cmd_Args_Decrypt(0, key.getKeyID(), M_Mech.RSApPKCS1OAEP,
         new M_CipherText(M_Mech.RSApPKCS1OAEP,
-            new M_Mech_Cipher_RSApPKCS1(new M_Bignum(new BigInteger(ciphertext))),
+            new M_Mech_Cipher_RSApPKCS1(num),
             new M_Mech_IV_RSApPKCS1OAEP(new M_ByteBlock(new byte[0]))),
         M_PlainTextType.Bytes);
     cmd = new M_Command(M_Cmd.Decrypt, 0, args);
