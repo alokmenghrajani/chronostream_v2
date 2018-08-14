@@ -4,8 +4,10 @@ import com.ncipher.provider.km.KMHmacSHA256Key;
 import com.ncipher.provider.km.KMRSAPrivateKey;
 import com.ncipher.provider.km.KMRijndaelKey;
 import com.ncipher.provider.km.nCipherKM;
+import java.io.ByteArrayInputStream;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.KeyStore;
 import java.security.Provider;
 import java.security.PublicKey;
 import java.security.Security;
@@ -39,8 +41,13 @@ import org.openjdk.jmh.annotations.State;
  * - RSA-PKCS1-SHA512 signing (2048 bit key) (TODO)
  */
 public class Chronostream {
+  public static final String KEYSTORE = "1b0e6e7ded66468082d51dfc29d6e8dcfdc29c4b";
+  public static final String PASSWORD = "prout";
+  public static final String SOFTCARD = "952c93dfde960d877ea039d805fb2a70b6578460";
+
   private static Object lock = new Object();
   private static Provider provider;
+  private static KeyStore keyStore;
 
   private static KMRijndaelKey aesKey;
   public static final int AES_MIN = 100;
@@ -76,8 +83,8 @@ public class Chronostream {
           provider = new nCipherKM();
           Security.addProvider(provider);
 
-          // Set the softcard. Password is "prout"
-          System.setProperty("protect", "softcard:fb1d3e233393838d51eb5c0a911d3056c4155af8");
+          // Set the softcard.
+          System.setProperty("protect", String.format("softcard:%s", SOFTCARD));
 
           // Create keys
           KeyGenerator keyGenerator = KeyGenerator.getInstance("AES", provider);
@@ -95,6 +102,10 @@ public class Chronostream {
           KeyPair keyPair = keyPairGen.generateKeyPair();
           rsaPublicKey = keyPair.getPublic();
           rsaPrivateKey = (KMRSAPrivateKey)keyPair.getPrivate();
+
+          keyStore = KeyStore.getInstance("nCipher.sworld");
+          ByteArrayInputStream is = new ByteArrayInputStream(KEYSTORE.getBytes());
+          keyStore.load(is, PASSWORD.toCharArray());
         }
       }
 
@@ -169,6 +180,16 @@ public class Chronostream {
   }
 
   // RSA
+
+  @Benchmark
+  public byte[] testRsaKeyCreationJce(ThreadState state) throws Exception {
+    return Rsa.rsaKeyCreationJce(keyStore, provider);
+  }
+
+  @Benchmark
+  public long testRsaKeyCreationNCore(ThreadState state) throws Exception {
+    return Rsa.rsaKeyCreationNCore();
+  }
 
   @Benchmark
   public byte[] testRsaDecryptionJce(ThreadState state) throws Exception {
